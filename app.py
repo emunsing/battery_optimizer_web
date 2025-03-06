@@ -9,13 +9,13 @@ from batteryopt import process_pge_meterdata, merge_solar_and_load_data, build_t
 
 def process_submission(solar_size_kw, batt_size_kwh, csv_file):
     # Convert text input to float
-    solar_kw = float(solar_size_kw)
+    solar_size_kw = float(solar_size_kw)
     batt_size_kwh = float(batt_size_kwh)
     
     # Read CSV file into a DataFrame
     elec_usage = process_pge_meterdata(csv_file.name)
 
-    site_data = merge_solar_and_load_data(elec_usage, solar_kw * REF_SOLAR_DATA)
+    site_data = merge_solar_and_load_data(elec_usage, solar_size_kw * REF_SOLAR_DATA)
     tariff = build_tariff(site_data.index)
     battery_dispatch = run_optimization(site_data, tariff, batt_e_max=batt_size_kwh)
     all_input = pd.concat([site_data, tariff, battery_dispatch], axis=1)

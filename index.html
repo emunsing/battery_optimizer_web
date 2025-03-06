@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>CLP Solver Demo</title>
+    <meta content="" />
+    <link
+      rel="stylesheet"
+      href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+      integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
+      crossorigin="anonymous"
+    />
+    <style>
+      html,
+      body {
+        height: 100vh;
+      }
+      .border {
+        border: 1px solid red;
+      }
+      textarea {
+        width: 100%;
+        font-family: "Courier New", Courier, monospace;
+        font-size: small;
+      }
+    </style>
+  </head>
+  <body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="clp-wasm.js" type="text/javascript"></script>
+    <div class="container-fluid">
+      <h3>Upload CSV and Set Parameters</h3>
+      <label for="solarSize">Solar Size (kW):</label>
+      <input type="text" id="solarSize" value="1.0" />
+  
+      <label for="batteryCapacity">Battery Capacity (kWh):</label>
+      <input type="text" id="batteryCapacity" value="13.5" />
+  
+      <label for="csvFile">Select CSV File:</label>
+      <input type="file" id="csvFile" accept=".csv" />
+
+      <div class="row">
+        <div class="col">
+          <div
+            class="btn btn-primary my-1"
+            id="submitProblemButton"
+          >
+            Submit
+          </div>
+        </div>
+      </div>
+      <div class="row h-50">
+        <div class="col">
+          <h5>Solution</h5>
+          <textarea id="solution" rows="18"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <div
+          class="btn btn-primary my-1"
+          onclick="solveLowLevelProblem()"
+        >
+          Solve Low-Level Problem
+        </div>
+      </div>
+    </div>
+    <script type="module">
+      import {testOpt} from './battery_opt.js';
+      let lpProblemElmt = null;
+      let solutionElmt = null;
+      let solarSizeElmt = null; 
+      let batteryCapacityElmt = null;
+      let csvFileElmt = null;
+
+      function init() {
+        solarSizeElmt = document.getElementById("solarSize");
+        batteryCapacityElmt = document.getElementById("batteryCapacity");
+        csvFileElmt = document.getElementById("csvFile"); 
+        solutionElmt = document.getElementById("solution");
+      }
+      document.addEventListener('DOMContentLoaded', init);
+
+      Module.onRuntimeInitialized = async (_) => {
+      };
+
+      function constructModel({solar_size_kw, battery_size_kwh, solar, load, px_buy, px_sell}){
+        console.log("In constructModel");
+        const res = testOpt({px: solar, e_max: 2});
+        console.log(res.P)
+        console.log(res.E)
+      }
+
+      function loadAndSolveProblem(){
+        const solar_size_kw = parseFloat(solarSizeElmt.value);
+        const battery_size_kwh = parseFloat(batteryCapacityElmt.value);
+        
+        if (isNaN(solar_size_kw) || isNaN(battery_size_kwh)) {
+          alert("Please enter valid numeric values for Solar Size and Battery Capacity.");
+          return;
+        }
+
+        const file = csvFileElmt.files[0];
+        if (!file) {
+          alert("Please select a CSV file.");
+          return;
+        }
+        
+        // Parse CSV file using Papa Parse:
+        Papa.parse(file, {
+          header: true,         // Use the first row as header names
+          dynamicTyping: true,  // Automatically convert numeric fields to numbers
+          skipEmptyLines: true,
+          complete: function (results) {
+            const solar = results.data.map(row => row.solar);
+            const load = results.data.map(row => row.load);
+            const px_buy = results.data.map(row => row.px_buy);
+            const px_sell = results.data.map(row => row.px_sell);
+            constructModel({
+              solar_size_kw: solar_size_kw,
+              battery_size_kwh: battery_size_kwh,
+              solar: solar,
+              load: load,
+              px_buy: px_buy,
+              px_sell: px_sell
+            });
+          },
+          error: function (err) {
+            console.error("Error parsing CSV:", err);
+          }
+        });
+      }
+      document.getElementById('submitProblemButton').addEventListener('click', loadAndSolveProblem);
+
+    </script>
+  </body>
+</html>

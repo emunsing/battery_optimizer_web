@@ -40,8 +40,8 @@ Current performance is very slow and fails for larger models (200ms for ~100 row
 
 ## TODO
 
-[ ] Performance issues: Why is CLP-Wasm so slow? Are there existing benchmarks?
-[ ] Error handling
-[ ] Deploy to Github Pages
-[ ] Plotting / visualization of results
-[ ] Datetime indexing and adaptation for tariffs
+- [ ] Performance issues: Why is CLP-Wasm so slow? Are there existing benchmarks?
+- [ ] Error handling
+- [ ] Deploy to Github Pages
+- [ ] Plotting / visualization of results
+- [ ] Datetime indexing and adaptation for tariffs

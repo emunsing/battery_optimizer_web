@@ -89,9 +89,11 @@ export function optimizeBattery({battery_max_kwh, batt_min_kwh, batt_max_kw, bat
         row_ub[n + i] = net_load;
     }
     
-    console.log("Entering solver");
-    const solver_entry = performance.now();
+    console.log("Loading data into solver");
+    const solver_load = performance.now();
     let success = wrapper.loadProblem(obj, col_lb, col_ub, row_lb, row_ub, matrix); // returns true if the problem dimensions matched
+    const solver_entry = performance.now();
+    console.log("Starting primal optimization");
     wrapper.primal();
     const solver_finish = performance.now();
 
@@ -115,7 +117,8 @@ export function optimizeBattery({battery_max_kwh, batt_min_kwh, batt_max_kw, bat
     }
 
     const optimization_finish = performance.now();
-    const optimization_stats = {preprocess: solver_entry - optimization_entry, 
+    const optimization_stats = {preprocess: solver_load - optimization_entry, 
+                                load_problem: solver_entry - solver_load,
                                 solve: solver_finish - solver_entry, 
                                 postprocess: optimization_finish - solver_finish};
 

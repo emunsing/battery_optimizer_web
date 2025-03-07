@@ -51,17 +51,7 @@
       <div class="row h-50">
         <div class="col">
           <h5>Solution</h5>
-          <textarea id="solution" rows="18"></textarea>
-        </div>
-      </div>
-    </div>
-    <div class="row">
-      <div class="col">
-        <div
-          class="btn btn-primary my-1"
-          onclick="solveLowLevelProblem()"
-        >
-          Solve Low-Level Problem
+          <textarea id="solution" rows="20"></textarea>
         </div>
       </div>
     </div>
@@ -139,6 +129,8 @@
             px_sell: px_sell,
           });
           // const res = testOpt({px: solar, e_max: 2});
+
+          solutionElmt.value = "Solution times (ms): " + JSON.stringify(res.optimization_stats, null, 2) +   "\nP_batt: " + JSON.stringify(res.P_batt, null, 2) + "\nE: " + JSON.stringify(res.E, null, 2);
 
           console.log("P_batt: ", res.P_batt)
           console.log("P_grid: ", res.P_grid)

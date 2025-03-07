@@ -66,7 +66,7 @@
       </div>
     </div>
     <script type="module">
-      import {testOpt} from './battery_opt.js';
+      import {optimizeBattery, testOpt} from './battery_opt.js';
       let lpProblemElmt = null;
       let solutionElmt = null;
       let solarSizeElmt = null; 
@@ -83,13 +83,6 @@
 
       Module.onRuntimeInitialized = async (_) => {
       };
-
-      function constructModel({solar_size_kw, battery_size_kwh, solar, load, px_buy, px_sell}){
-        console.log("In constructModel");
-        const res = testOpt({px: solar, e_max: 2});
-        console.log(res.P)
-        console.log(res.E)
-      }
 
       function loadAndSolveProblem(){
         const solar_size_kw = parseFloat(solarSizeElmt.value);
@@ -112,15 +105,15 @@
           dynamicTyping: true,  // Automatically convert numeric fields to numbers
           skipEmptyLines: true,
           complete: function (results) {
-            const solar = results.data.map(row => row.solar);
-            const load = results.data.map(row => row.load);
+            const solar = results.data.map(row => row.solar * solar_size_kw);
+            const consumption = results.data.map(row => row.load);
             const px_buy = results.data.map(row => row.px_buy);
             const px_sell = results.data.map(row => row.px_sell);
-            constructModel({
-              solar_size_kw: solar_size_kw,
+            // testOpt({px: solar, e_max: 2});
+            solveAndProcessResults({ 
               battery_size_kwh: battery_size_kwh,
               solar: solar,
-              load: load,
+              consumption: consumption,
               px_buy: px_buy,
               px_sell: px_sell
             });
@@ -129,6 +122,30 @@
             console.error("Error parsing CSV:", err);
           }
         });
+
+        function solveAndProcessResults({battery_size_kwh, solar, consumption, px_buy, px_sell}){
+          const backup_reserve = 0.2;
+          const e_min = backup_reserve * battery_size_kwh;
+
+          const res = optimizeBattery({
+            battery_max_kwh: battery_size_kwh,
+            batt_min_kwh: e_min,
+            batt_max_kw: 5.0,
+            batt_rt_eff: 1.0, //0.85,
+            dt: 1.0, 
+            solar: solar,
+            consumption: consumption,
+            px_buy: px_buy,
+            px_sell: px_sell,
+          });
+          // const res = testOpt({px: solar, e_max: 2});
+
+          console.log("P_batt: ", res.P_batt)
+          console.log("P_grid: ", res.P_grid)
+          console.log("E: ", res.E)
+          console.log("Optimization stats: ", res.optimization_stats)
+        }
+
       }
       document.getElementById('submitProblemButton').addEventListener('click', loadAndSolveProblem);
 

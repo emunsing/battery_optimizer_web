@@ -1,6 +1,5 @@
 import pandas as pd
 import pvlib
-import pvlib
 from constants import LATITUDE, LONGITUDE, TIMEZONE
 
 def get_expected_solar_output(latitude: float, longitude: float, start_yr: int, end_yr: int, timezone:str, surface_tilt: float | None =None, 

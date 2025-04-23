@@ -1,0 +1,28 @@
+{
+  "name": "battery_optimizer_web",
+  "version": "1.0.0",
+  "description": "This is to demonstrate a proof-of-concept for using CLP-Wasm for in-browser battery optimization.",
+  "main": "battery_opt.js",
+  "scripts": {
+    "test": "test_optimizer.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/emunsing/battery_optimizer_web.git"
+  },
+  "keywords": [],
+  "author": "emunsing",
+  "type": "module",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/emunsing/battery_optimizer_web/issues"
+  },
+  "homepage": "https://github.com/emunsing/battery_optimizer_web#readme",
+  "dependencies": {
+    "clp-wasm": "^0.0.20"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  }
+}

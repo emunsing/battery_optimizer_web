@@ -38,6 +38,75 @@ Currently, output is just raw text.
 
 Current performance is very slow and fails for larger models (200ms for ~100 rows of meter data, 13s for 500 rows of meter data, and failures on larger models). Without a clear understanding of this performance gap between CLP run locally through CVXPy (which can have high overhead) and CLP-Wasm, there doesn't seem to be a compelling case to push this forward.
 
+# Performance
+
+## Benchmarking: CLP desktop
+
+Using an MPS file constructed through the tooling in *Battery_Scratch.ipynb* the following benchmark times were realized on my M2 Macbook:
+
+Experimental runtimes on desktop running clp with the following bash script:
+
+```
+for f in *.mps; do
+  sum=0
+  # repeat 10 times
+  for i in {1..10}; do
+    t=$( { time -p clp "$f" solve -solution "${f%.mps}.txt" 1>/dev/null; } 2>&1 \
+          | awk '/^real/ { print $2 }' )
+    # accumulate
+    sum=$(awk "BEGIN { printf \"%.6f\", $sum + $t }")
+  done
+  # compute average
+  avg=$(awk "BEGIN { printf \"%.3f\", $sum / 10 }")
+  echo "$f $avg"
+done
+```
+
+- tmp_full_noindex.mps 0.706  
+- tmp_half_noindex.mps 0.390  
+- tmp_quarter_noindex.mps 0.276  
+- tmp_onethousand_noindex.mps 0.063  
+- tmp_fivehundred_rows_noindex.mps 0.026  
+
+Running in CyLP results in lower times, possibly due to overhead of process setup/tearodnw in the command line:
+- tmp_full_noindex.csv: 0.587
+- tmp_half_noindex.csv: 0.219
+- tmp_quarter_noindex.csv: 0.073
+- tmp_onethousand_noindex.csv: 0.021
+- tmp_fivehundred_rows_noindex.csv: 0.009
+
+A **basis** can be saved from a solution to serve as the warm-start initiation point for the next problem:
+```
+$ clp mps_files/tmp_full_noindex.mps solve BasisOut first.bas
+$ clp mps_files/tmp_full_noindex_warmstart.mps BasisIn first.bas solve
+```
+
+Experimentally, this resulted in a 50-60% reduction in runtime for a full-year problem.
+
+***Note***: An issue can arrise when calling CyLP multiple times in quick succession from a notebook.  As a result, the time benchmarking using CyLP was done in solution_time.py
+
+
+# CLP-WASM Rebuild
+
+The slow solution time for the existing CLP-Wasm build is surprising: in contrast with the quick times above, the Wasm build takes ~1s to solve a 500-row problem, and crashes for larger problems.  Being able to investigate this would likely require both a clean integration test, and the ability to compile different variants of the webassembly problem.
+
+The existing CLP-Wasm build is from 2020/2021 and is significantly out-of-date with the current CLP repo.  The build has a folder structure which includes `/app` and `/excluded` under CLP, which is very different from the main CLP directory structure.  
+
+To change this, it would seem that we need to do a full rethink of the clp-wasm compilation.  I worked on trying to adapt the existing clp-wasm repo, but am not convinced that it was very worth is, and it may be better to start from scratch.  The main clp-wasm contributions are:
+- /common (wrapper .js scripts; critical)
+- /solver (wrapper interface; critical)
+- /clp-wasm.d.ts 
+- And the build tools: Dockerfile, package.json, CMakeLists.txt
+
+Key hurdles I hit when attempting to adapt this:
+- I had issues with Boost multiprecision references when building, requiring knowledge of how and where to set the Boost installation paths for the compiler.
+- The current CLP repo has a different structure and dependency set than is present in the old CLP-Wasm build.
+- Building the current CLP repo requires building a lot of other COIN tools (see [clp/.coin-or/config.yml](https://github.com/coin-or/Clp/blob/master/.coin-or/config.yml)), which is itself beyond my reach.  The installation instructions in the CLP Readme should be a good starting point, but I'm new to CMakeList.txt files.
+
+## Integration Test Challenges
+To benchmark the system, we'd like integration tests for the WebAssembly solution in Javascript.  Attempting to run test_optimizer.test.js resulted in a `SyntaxError: Cannot use import statement outside a module` with the likely solution being to re-build clp-wasm.js to explicitly export the Module for node compatability.  Doing this in a replicable way would *require* being able to compile clp-wasm.js, leading to the blocker above.
+
+
 ## TODO
 
 - [ ] Performance issues: Why is CLP-Wasm so slow? Are there existing benchmarks?

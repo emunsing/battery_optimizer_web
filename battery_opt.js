@@ -90,6 +90,16 @@ export function optimizeBattery({battery_max_kwh, batt_min_kwh, batt_max_kw, bat
     }
     
     console.log("Loading data into solver");
+    console.log("Done with problem setup!");
+    console.log("nVars: ", nVars)
+    console.log("nRows: ", nRows)
+    console.log("objective size: ", obj.length)
+    console.log("col_lb size: ", col_lb.length)
+    console.log("col_ub size: ", col_ub.length)
+    console.log("row_lb size: ", row_lb.length)
+    console.log("row_ub size: ", row_ub.length)
+    console.log("matrix element count: ", matrix.length)
+
     const solver_load = performance.now();
     let success = wrapper.loadProblem(obj, col_lb, col_ub, row_lb, row_ub, matrix); // returns true if the problem dimensions matched
     const solver_entry = performance.now();

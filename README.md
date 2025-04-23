@@ -75,7 +75,7 @@ Running in CyLP results in lower times, possibly due to overhead of process setu
 - tmp_onethousand_noindex.csv: 0.021
 - tmp_fivehundred_rows_noindex.csv: 0.009
 
-A **basis** can be saved from a solution to serve as the warm-start initiation point for the next problem:
+A **basis** can be saved from a solution to serve as the warm-start initiation point for the next problem in CLP:
 ```
 $ clp mps_files/tmp_full_noindex.mps solve BasisOut first.bas
 $ clp mps_files/tmp_full_noindex_warmstart.mps BasisIn first.bas solve
@@ -83,7 +83,9 @@ $ clp mps_files/tmp_full_noindex_warmstart.mps BasisIn first.bas solve
 
 Experimentally, this resulted in a 50-60% reduction in runtime for a full-year problem.
 
-***Note***: An issue can arrise when calling CyLP multiple times in quick succession from a notebook.  As a result, the time benchmarking using CyLP was done in solution_time.py
+***Notes on CyLP and Warm-start***: 
+- An issue can arrise when calling CyLP multiple times in quick succession from a notebook.  As a result, the time benchmarking using CyLP was done in solution_time.py
+- CyLP does not expose the `writeBasis, readBasis` [methods of CLPSimplex](https://www.coin-or.org/Doxygen/Clp/classClpSimplex.html#a64d5a2c1729f83ce00155871ef2e4368), making it impossible to directly cache a solution for future warm-start use by a different process. Warm starts *can* be implemented by adjusting bounds and constraints on an existing problem, but that can be a fairly challenging process.  For warm-start, it may be smarter to use PuLP to write an MPS file and then call CLP with a BasisIn from a previous solution.
 
 
 # CLP-WASM Rebuild

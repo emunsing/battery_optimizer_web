@@ -119,3 +119,70 @@ def run_optimization(site_data: pd.DataFrame, tariff: pd.DataFrame, batt_rt_eff=
                         'E': E[1:].value}).set_index(site_data.index)
     return res
 
+def run_endogenous_sizing_optimization(site_data: pd.DataFrame,
+                     tariff: pd.DataFrame,
+                     solar_annualized_cost_per_kw=3.0 / 20,
+                     batt_annualized_cost_per_unit=1000,
+                     batt_rt_eff=0.85,
+                     batt_block_e_max=13.5,
+                     batt_p_max=5,
+                                       integer_problem=False,
+                     ) -> tuple[float, float, pd.DataFrame]:
+    assert site_data.index.equals(tariff.index), "Dataframes must have the same index"
+
+    """Assumes that solar data in the site_data is per kW"""
+    simulation_years = (site_data.index[-1] - site_data.index[0]).total_seconds() / (365 * 24 * 60 * 60)
+
+    dt = 1.0
+
+    oneway_eff = np.sqrt(batt_rt_eff)
+    backup_reserve = 0.2
+    n = site_data.shape[0]
+    E_transition = np.hstack([np.eye(n), np.zeros(n).reshape(-1,1)])
+
+    s_size_kw = cp.Variable(integer=integer_problem)
+    n_batts = cp.Variable(integer=integer_problem)
+    batt_e_max = n_batts * batt_block_e_max
+    e_min = backup_reserve * batt_e_max
+    E_0 = e_min
+    P_batt_charge = cp.Variable(n)
+    P_batt_discharge = cp.Variable(n)
+    P_grid_buy = cp.Variable(n)
+    P_grid_sell = cp.Variable(n)
+    E = cp.Variable(n+1)
+
+    # Power flows are all AC, and are signed relative to the bus: injections to the bus are positive, withdrawals/exports from the bus are negative
+
+    constraints = [-batt_p_max <= P_batt_charge,
+                   P_batt_charge <= 0,
+                   0 <= s_size_kw,
+                   s_size_kw <= 15,
+                   0 <= n_batts,
+                   n_batts <= 10,
+                   0 <= P_batt_discharge,
+                   P_batt_discharge <= batt_p_max,
+                   0 <= P_grid_buy,
+                   P_grid_sell <= 0,
+                   e_min <= E,
+                   E <= batt_e_max,
+                   E[1:] == E_transition @ E - (P_batt_charge * oneway_eff + P_batt_discharge / oneway_eff) * dt,
+                   P_batt_charge + P_batt_discharge + P_grid_buy + P_grid_sell - site_data['load'] + s_size_kw * site_data['solar'] == 0,
+                   E[0] == E_0
+                   ]
+
+    obj = cp.Minimize(P_grid_sell @ tariff['px_sell'] +
+                      P_grid_buy @ tariff['px_buy'] +
+                      n_batts * batt_annualized_cost_per_unit * simulation_years +
+                      s_size_kw * solar_annualized_cost_per_kw * simulation_years
+                      )
+
+    prob = cp.Problem(obj, constraints)
+
+    opt_start = time.time()
+    prob.solve()
+    print(f"Optimization done in {time.time() - opt_start :.3f} seconds")
+
+    res = pd.DataFrame.from_dict({'P_batt': P_batt_charge.value + P_batt_discharge.value,
+                        'P_grid': P_grid_buy.value + P_grid_sell.value,
+                        'E': E[1:].value}).set_index(site_data.index)
+    return n_batts.value, s_size_kw.value, res

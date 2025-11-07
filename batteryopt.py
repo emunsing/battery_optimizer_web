@@ -4,7 +4,6 @@ import cvxpy as cp
 import pandas as pd
 import numpy as np
 import time
-import matplotlib.pyplot as plt
 import scipy.sparse as sps
 
 from constants import TIMEZONE

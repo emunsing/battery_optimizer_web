@@ -2,6 +2,7 @@ import click
 import numpy as np
 import pandas as pd
 import scipy.sparse as sps
+import cvxpy as cp
 import time
 from cylp.cy import CyClpSimplex
 from cylp.py.modeling.CyLPModel import CyLPModel
@@ -10,11 +11,126 @@ from cylp.py.modeling.CyLPModel import CyLPModel
 def cli():
     pass
 
-def run_cylp_optimization(site_data, tariff, batt_rt_eff=0.85,
+
+def optimize_many_sites_cvxpy_base(many_sites_net_load_data: pd.DataFrame,
+                     tariff: pd.DataFrame, batt_rt_eff=0.85,
+                     batt_e_max=13.5, batt_p_max=5, solver=None) -> list:
+
+    assert many_sites_net_load_data.index.equals(tariff.index), "Dataframes must have the same index"
+    assert tariff.index.diff()[1:].unique().size == 1, "Tariff must have uniform time steps"
+    dt = tariff.index.diff().unique()[1].total_seconds() / 3600.0  # in hours
+
+    oneway_eff = np.sqrt(batt_rt_eff)
+    backup_reserve = 0.2
+    e_min = backup_reserve * batt_e_max
+
+    n = many_sites_net_load_data.shape[0]
+    net_load = cp.Parameter(n)
+
+    E_0 = e_min
+    E_transition = sps.hstack([sps.eye(n, format="csr"), sps.csr_matrix((n, 1))], format="csr")
+
+    P_batt_charge = cp.Variable(n)
+    P_batt_discharge = cp.Variable(n)
+    P_grid_buy = cp.Variable(n)
+    P_grid_sell = cp.Variable(n)
+    E = cp.Variable(n+1)
+
+    # Power flows are all AC, and are signed relative to the bus: injections to the bus are positive, withdrawals/exports from the bus are negative
+
+    constraints = [-batt_p_max <= P_batt_charge,
+                P_batt_charge <= 0,
+                0 <= P_batt_discharge,
+                P_batt_discharge <= batt_p_max,
+                0 <= P_grid_buy,
+                P_grid_sell <= 0,
+                e_min <= E,
+                E <= batt_e_max,
+                E[1:] == E_transition @ E - (P_batt_charge * oneway_eff + P_batt_discharge / oneway_eff) * dt,
+                P_batt_charge + P_batt_discharge + P_grid_buy + P_grid_sell - net_load == 0,
+                E[0] == E_0
+                ]
+
+    obj = cp.Minimize(P_grid_sell @ tariff['px_sell'] + P_grid_buy @ tariff['px_buy'])
+
+    prob = cp.Problem(obj, constraints)
+
+    solve_times = []
+
+    for site_id, site_net_load in many_sites_net_load_data.items():
+        net_load.value = site_net_load.values
+        opt_start = time.time()
+        prob.solve(warm_start=True, solver=solver)
+        elapsed = time.time() - opt_start
+        solve_times.append(elapsed)
+        print(f"Optimization done in {elapsed :.3f} seconds")
+
+    return solve_times
+
+def optimize_many_sites_cvxpy_e_simple(many_sites_net_load_data: pd.DataFrame,
+                     tariff: pd.DataFrame, batt_rt_eff=0.85,
+                     batt_e_max=13.5, batt_p_max=5, solver=None) -> list:
+    assert many_sites_net_load_data.index.equals(tariff.index), "Dataframes must have the same index"
+    assert tariff.index.diff()[1:].unique().size == 1, "Tariff must have uniform time steps"
+    dt = tariff.index.diff().unique()[1].total_seconds() / 3600.0  # in hours
+
+    oneway_eff = np.sqrt(batt_rt_eff)
+    backup_reserve = 0.2
+    e_min = backup_reserve * batt_e_max
+
+    n = many_sites_net_load_data.shape[0]
+    net_load = cp.Parameter(n)
+
+    E_0 = e_min
+
+    P_batt_charge = cp.Variable(n)
+    P_batt_discharge = cp.Variable(n)
+    P_grid_buy = cp.Variable(n)
+    P_grid_sell = cp.Variable(n)
+    E = cp.Variable(n+1)
+    E_next = E[1: n + 1]
+    E_now = E[0: n]
+
+    # Power flows are all AC, and are signed relative to the bus: injections to the bus are positive, withdrawals/exports from the bus are negative
+
+    constraints = [-batt_p_max <= P_batt_charge,
+                P_batt_charge <= 0,
+                0 <= P_batt_discharge,
+                P_batt_discharge <= batt_p_max,
+                0 <= P_grid_buy,
+                P_grid_sell <= 0,
+                e_min <= E,
+                E <= batt_e_max,
+                E[1:] == E_now - E_next - (P_batt_charge * oneway_eff + P_batt_discharge / oneway_eff) * dt,
+                P_batt_charge + P_batt_discharge + P_grid_buy + P_grid_sell - net_load == 0,
+                E[0] == E_0
+                ]
+
+    obj = cp.Minimize(P_grid_sell @ tariff['px_sell'] + P_grid_buy @ tariff['px_buy'])
+
+    prob = cp.Problem(obj, constraints)
+
+    solve_times = []
+
+    for site_id, site_net_load in many_sites_net_load_data.items():
+        net_load.value = site_net_load.values
+        opt_start = time.time()
+        prob.solve(warm_start=True, solver=solver)
+        elapsed = time.time() - opt_start
+        solve_times.append(elapsed)
+        print(f"Optimization done in {elapsed :.3f} seconds")
+
+    return solve_times
+
+
+def run_cylp_optimization(many_sites_net_load_data, tariff, batt_rt_eff=0.85,
                           batt_e_max=13.5, batt_p_max=5):
-    net_load = site_data['load'] - site_data['solar']
-    n = len(net_load)
-    dt = 1.0
+    assert many_sites_net_load_data.index.equals(tariff.index), "Dataframes must have the same index"
+    assert tariff.index.diff()[1:].unique().size == 1, "Tariff must have uniform time steps"
+    dt = tariff.index.diff().unique()[1].total_seconds() / 3600.0  # in hours
+
+    net_load = many_sites_net_load_data.iloc[:, 0]
+    n = len(many_sites_net_load_data)
     oneway_eff = np.sqrt(batt_rt_eff)
     backup_reserve = 0.2
     e_min = backup_reserve * batt_e_max
@@ -58,28 +174,31 @@ def run_cylp_optimization(site_data, tariff, batt_rt_eff=0.85,
     # Power balance: P_charge + P_discharge + P_buy + P_sell - net_load = 0
     power_balance = m.addConstraint(P_batt_charge + P_batt_discharge + P_grid_buy + P_grid_sell == net_load.to_numpy())
 
+    solve_times = []
     # Solve
     s = CyClpSimplex(m)
     t0 = time.time()
     s.primal()
+    solve_times.append(time.time() - t0)
     print(f"Initial solve time: {time.time() - t0:.3f} s")
 
-    # ---- Warm start: modify RHS only ----
-    new_net_load = net_load * 1.05  # e.g., small perturbation
+    for i in range(1, many_sites_net_load_data.shape[1]):
+        site_net_load = many_sites_net_load_data.iloc[:, i].to_numpy()
 
-    t1 = time.time()
-    power_idx = m.inds.constIndex[power_balance.name]
-    current_upper = s.constraintsUpper
-    current_lower = s.constraintsLower
-    current_upper[power_idx] = new_net_load.to_numpy()
-    current_lower[power_idx] = new_net_load.to_numpy()
-    # Instead of re-building, we just update RHS directly in solver
-    s.setRowLowerArray(current_lower)
-    s.setRowUpperArray(current_upper)
+        power_idx = m.inds.constIndex[power_balance.name]
+        current_upper = s.constraintsUpper
+        current_lower = s.constraintsLower
+        current_upper[power_idx] = site_net_load
+        current_lower[power_idx] = site_net_load
+        # Instead of re-building, we just update RHS directly in solver
+        s.setRowLowerArray(current_lower)
+        s.setRowUpperArray(current_upper)
 
-    # t1 = time.time()
-    s.primal()   # re-solve, warm start
-    print(f"Warm-start re-solve time: {time.time() - t1:.3f} s")
+        t1 = time.time()
+        s.primal()   # re-solve, warm start
+        elapsed = time.time() - t1
+        solve_times.append(elapsed)
+        print(f"Warm-start re-solve time: {elapsed:.3f} s")
 
     return s.primalVariableSolution['E'], s
 
@@ -88,6 +207,33 @@ def run_cylp_optimization(site_data, tariff, batt_rt_eff=0.85,
 def cylp():
     input_df = pd.read_csv("~/src/battery_optimizer_web/data/tmp_full_noindex.csv")
     run_cylp_optimization(input_df, input_df)
+
+@cli.command()
+@click.argument('net-load', type=click.Path(exists=True))
+@click.argument('tariff', type=click.Path(exists=True))
+@click.option('--n-sites', type=int, default=5, help='Number of sites to test')
+def performance_comparison(net_load, tariff, n_sites):
+    many_sites_net_load_data = pd.read_csv(net_load, index_col=0, parse_dates=True)
+    tariff_data = pd.read_csv(tariff, index_col=0, parse_dates=True)
+    assert many_sites_net_load_data.index.equals(tariff_data.index), "Dataframes must have the same index"
+
+    many_sites_net_load_data = many_sites_net_load_data.iloc[:, :n_sites]
+
+    solver_times = {}
+
+    # for solver in [None, cp.CLARABEL, cp.SCS, cp.CBC, cp.HIGHS]:
+    #     print(f"Testing CVXPy with solver {solver}")
+    #     print("Optimizing using CVXPy base formulation")
+    #     cvxpy_base_times = optimize_many_sites_cvxpy_base(many_sites_net_load_data, tariff_data, solver=solver)
+    #     solver_times[f"{solver}_base"] = cvxpy_base_times
+    #     print("Optimizing using CVXPy simplified transition formulation")
+    #     cvxpy_e_simple_times = optimize_many_sites_cvxpy_e_simple(many_sites_net_load_data, tariff_data, solver=solver)
+    #     solver_times[f"{solver}_simple"] = cvxpy_e_simple_times
+
+    print("Optimizing using CyLP warm start")
+    cylp_times = run_cylp_optimization(many_sites_net_load_data, tariff_data)
+    solver_times["cylp_warmstart"] = cylp_times
+
 
 if __name__ == "__main__":
     cli()

@@ -1,0 +1,28 @@
+[project]
+name = "batteryoptimizer_web"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "emunsing",email = "eric.munsing@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+]
+
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pandas = "*"
+numpy = "*"
+cvxpy = "*"
+highspy = "*"
+pvlib = "*"
+pytest = "*"
+pyyaml = "*"
+click = "*"
+cylp = "*"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

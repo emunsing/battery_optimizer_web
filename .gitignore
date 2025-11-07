@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-
+*.bas
 
 clp-wasm.js
 clp-wasm.wasm

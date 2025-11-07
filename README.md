@@ -81,10 +81,23 @@ $ clp mps_files/tmp_full_noindex.mps solve BasisOut first.bas
 $ clp mps_files/tmp_full_noindex_warmstart.mps BasisIn first.bas solve
 ```
 
-Experimentally, this resulted in a 50-60% reduction in runtime for a full-year problem.
+Experimentally, this resulted in a 50-60% reduction in runtime for a full-year problem, resulting in a solution time (excluding MPS load) of ~0.45s. This reflects a change in constraints (solar and load), making the problem infeasible.
+
+Solvers:
+- CLP (accessed via PuLP or CyLP)
+- HiGHs ()
+
+Levels of warm start:
+- Load prior solution
+- Load prior basis from .bas file
+- Modify existing problem in memory (e.g. change bounds/constraints) and re-solve
+
+Levels of problem modification:
+- Change objective (change tariff, change battery/solar cost)
+- Change constraints (solar timeseries, load timeseries, site import/export limits) - changing solar and load timeseries are most common
 
 ***Notes on CyLP and Warm-start***: 
-- An issue can arrise when calling CyLP multiple times in quick succession from a notebook.  As a result, the time benchmarking using CyLP was done in solution_time.py
+- An issue can arise when calling CyLP multiple times in quick succession from a notebook.  As a result, the time benchmarking using CyLP was done in solution_time.py
 - CyLP does not expose the `writeBasis, readBasis` [methods of CLPSimplex](https://www.coin-or.org/Doxygen/Clp/classClpSimplex.html#a64d5a2c1729f83ce00155871ef2e4368), making it impossible to directly cache a solution for future warm-start use by a different process. Warm starts *can* be implemented by adjusting bounds and constraints on an existing problem, but that can be a fairly challenging process.  For warm-start, it may be smarter to use PuLP to write an MPS file and then call CLP with a BasisIn from a previous solution.
 
 

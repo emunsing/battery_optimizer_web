@@ -83,7 +83,7 @@ def run_optimization(site_data: pd.DataFrame, tariff: pd.DataFrame, batt_rt_eff=
     n = site_data.shape[0]
     E_0 = e_min
 
-    E_transition = sps.hstack([sps.eye(n, format="csr"), sps.csr_matrix((n, 1))], format="csr")
+    E_transition = sps.hstack([sps.eye(n, format="csr"), sps.csr_matrix((n, 0))], format="csr")
 
     P_batt_charge = cp.Variable(n)
     P_batt_discharge = cp.Variable(n)
@@ -138,7 +138,7 @@ def run_endogenous_sizing_optimization(site_data: pd.DataFrame,
     oneway_eff = np.sqrt(batt_rt_eff)
     backup_reserve = 0.2
     n = site_data.shape[0]
-    E_transition = sps.hstack([sps.eye(n, format="csr"), sps.csr_matrix((n, 1))], format="csr")
+    E_transition = sps.hstack([sps.eye(n, format="csr"), sps.csr_matrix((n, 0))], format="csr")
 
     s_size_kw = cp.Variable(integer=integer_problem)
     n_batts = cp.Variable(integer=integer_problem)

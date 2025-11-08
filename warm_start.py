@@ -111,7 +111,7 @@ def optimize_many_sites_cvxpy_e_simple(many_sites_net_load_data: pd.DataFrame,
                 P_grid_sell <= 0,
                 e_min <= E,
                 E <= batt_e_max,
-                E[1:] == E_now - E_next - (P_batt_charge * oneway_eff + P_batt_discharge / oneway_eff) * dt,
+                E[1:] == E[0: n] - (P_batt_charge * oneway_eff + P_batt_discharge / oneway_eff) * dt,
                 P_batt_charge + P_batt_discharge + P_grid_buy + P_grid_sell - net_load == 0,
                 E[0] == E_0
                 ]
@@ -318,8 +318,13 @@ def cylp():
 @cli.command()
 @click.argument('net-load', type=click.Path(exists=True))
 @click.argument('tariff', type=click.Path(exists=True))
-@click.option('--n-sites', type=int, default=3, help='Number of sites to test')
-def performance_comparison(net_load, tariff, n_sites):
+@click.argument('outfile', type=click.Path())
+@click.option('--n-sites', type=int, default=5, help='Number of sites to test')
+def performance_comparison(net_load, tariff, n_sites, outfile):
+    """Compare multiple solvers
+    performance-comparison ./data/smart_city_net_load.csv ./data/smart_city_tariff.csv ~/Desktop/solver_times.csv
+    """
+
     many_sites_net_load_data = pd.read_csv(net_load, index_col=0, parse_dates=True)
     tariff_data = pd.read_csv(tariff, index_col=0, parse_dates=True)
     assert many_sites_net_load_data.index.equals(tariff_data.index), "Dataframes must have the same index"
@@ -328,8 +333,7 @@ def performance_comparison(net_load, tariff, n_sites):
 
     solver_times = {}
 
-    # for solver in [None, cp.CLARABEL, cp.CBC, cp.HIGHS]:
-    for solver in [None]:
+    for solver in [cp.CLARABEL, cp.CBC, cp.HIGHS]:
         print(f"Testing CVXPy with solver {solver}")
         print("Optimizing using CVXPy base formulation")
         cvxpy_base_times = optimize_many_sites_cvxpy_base(many_sites_net_load_data, tariff_data, solver=solver)
@@ -342,12 +346,9 @@ def performance_comparison(net_load, tariff, n_sites):
     cylp_times = run_cylp_optimization(many_sites_net_load_data, tariff_data)
     solver_times["cylp_warmstart"] = cylp_times
 
-    print("Optimizing using HiGHS warm start")
-    highs_times = run_highs_optimization(many_sites_net_load_data, tariff_data)
-    solver_times["highs_warmstart"] = highs_times
-
-    df = pd.DataFrame.concat(solver_times, names=['solver', 'run'])
+    df = pd.concat(solver_times, names=['solver', 'run'])
     print(df)
+    df.to_csv(outfile)
 
 
 if __name__ == "__main__":
